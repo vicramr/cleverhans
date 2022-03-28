@@ -6,6 +6,7 @@ import torch
 
 from cleverhans.torch.attacks.fast_gradient_method import fast_gradient_method
 from cleverhans.torch.utils import clip_eta
+from cleverhans.torch.utils import optimize_linear
 
 
 def projected_gradient_descent_l1(
@@ -23,6 +24,7 @@ def projected_gradient_descent_l1(
     rand_minmax=None,
     sanity_checks=True,
     l1_penalty=1.0,
+    iters_before_l1=None,
 ):
     """
     Parameters present in projected_gradient_descent are the same as in that function.
@@ -48,7 +50,10 @@ def projected_gradient_descent_l1(
               True. Default equals to eps.
     :param sanity_checks: bool, if True, include asserts (Turn them off to use less runtime /
               memory or for unit tests that intentionally pass strange input)
-    :param l1_penalty: (optional) float. The coefficient for the L1 penalty term.
+    :param l1_penalty: float. The coefficient for the L1 penalty term.
+    :param iters_before_l1: (optional) int. If given, this many iterations of vanilla PGD will
+              be done before the L1 regularization term is added. This does not change the total
+              number of iterations which are done.
     :return: a tensor for the adversarial example
     """
     if norm == 1:
@@ -58,11 +63,6 @@ def projected_gradient_descent_l1(
             " changes only one pixel at a time. We need "
             " to rigorously test a strong norm=1 PGD "
             "before enabling this feature."
-        )
-    if norm == 2:
-        raise NotImplementedError(
-            "The L1 version of this attack is currently only"
-            " implemented for the infinity norm."
         )
     if norm not in [np.inf, 2]:
         raise ValueError("Norm order must be either np.inf or 2.")
@@ -134,13 +134,17 @@ def projected_gradient_descent_l1(
         # If attack is targeted, minimize loss of target label rather than maximize loss of correct label
         if targeted:
             loss = -loss
-        l1_loss = l1_penalty * torch.sum(torch.abs(eta))
-        combined_loss = loss - l1_loss # Subtract l1_loss because combined_loss is being maximized
+        if iters_before_l1 is not None and iters_before_l1 <= i:
+            l1_loss = l1_penalty * torch.sum(torch.abs(eta))
+            combined_loss = loss - l1_loss # Subtract l1_loss because combined_loss is being maximized
+        else:
+            combined_loss = loss
 
         combined_loss.backward()
-        eta = eps_iter * torch.sign(adv_x.grad) # FGM step; this is valid for the L-infinity loss
-
+        eta = optimize_linear(adv_x.grad, eps_iter, norm) # FGM step, valid for both L-infinity and L2
         # Clip eta such that adv_x is in the norm ball
+        eta = clip_eta(eta, norm, eps)
+        # Also clip such that adv_x elements are within [clip_min, clip_max]
         if clip_min is not None or clip_max is not None:
             eta = torch.clamp(eta, clip_min - x, clip_max - x)
         adv_x = x + eta
