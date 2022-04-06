@@ -143,3 +143,32 @@ def zero_out_clipped_grads(grad, x, clip_min, clip_max):
     grad = torch.where(clip, torch.zeros_like(grad), grad)
 
     return grad
+
+
+def nes(model, x, y, loss_fn, n, sigma):
+    """
+    Returns an estimate of the gradient using only black-box queries. This implements
+    Algorithm 1 from "Black-box Adversarial Attacks with Limited Queries and Information".
+    Paper link: https://proceedings.mlr.press/v80/ilyas18a.html
+
+    :param model: a callable model function
+    :param x: a batch of size 1
+    :param y: a label batch of size 1
+    :param loss_fn: a loss function with reduction='none'
+    :param n: positive int, half the number of samples per iteration (equivalent to n in the paper)
+    :param sigma: positive float, the search variance (equivalent to sigma in the paper)
+    """
+    assert x.shape[0] == 1
+    noise_pos = torch.randn(n, x.shape[1], x.shape[2], x.shape[3], device=x.device)
+    noise = torch.cat([noise_pos, -noise_pos], dim=0)
+    eval_points = x + sigma * noise # x broadcasts
+    y_repeated = y.repeat(eval_points.shape[0])
+    assert y_repeated.shape == ((n*2),)
+    output = model(eval_points)
+    losses = loss_fn(output, y_repeated)
+    assert losses.shape == y_repeated.shape
+    losses = losses.reshape(-1, 1, 1, 1)
+    estimates = noise * losses # losses broadcasts
+    grad_estimate = torch.mean(estimates, dim=0, keepdim=True) / sigma
+    assert grad_estimate.shape == x.shape
+    return grad_estimate
