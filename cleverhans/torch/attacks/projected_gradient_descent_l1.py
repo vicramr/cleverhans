@@ -141,7 +141,8 @@ def projected_gradient_descent_l1(
             combined_loss = loss
 
         combined_loss.backward()
-        eta = optimize_linear(adv_x.grad, eps_iter, norm) # FGM step, valid for both L-infinity and L2
+        curr_perturbation = optimize_linear(adv_x.grad, eps_iter, norm) # FGM step, valid for both L-infinity and L2
+        eta += curr_perturbation # eta accumulates the total perturbation so far
         # Clip eta such that adv_x is in the norm ball
         eta = clip_eta(eta, norm, eps)
         # Also clip such that adv_x elements are within [clip_min, clip_max]
