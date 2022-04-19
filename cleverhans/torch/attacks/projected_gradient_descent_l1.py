@@ -24,7 +24,6 @@ def projected_gradient_descent_l1(
     rand_minmax=None,
     sanity_checks=True,
     l1_penalty=1.0,
-    iters_before_l1=None,
 ):
     """
     Parameters present in projected_gradient_descent are the same as in that function.
@@ -51,9 +50,6 @@ def projected_gradient_descent_l1(
     :param sanity_checks: bool, if True, include asserts (Turn them off to use less runtime /
               memory or for unit tests that intentionally pass strange input)
     :param l1_penalty: float. The coefficient for the L1 penalty term.
-    :param iters_before_l1: (optional) int. If given, this many iterations of vanilla PGD will
-              be done before the L1 regularization term is added. This does not change the total
-              number of iterations which are done.
     :return: a tensor for the adversarial example
     """
     if norm == 1:
@@ -134,11 +130,9 @@ def projected_gradient_descent_l1(
         # If attack is targeted, minimize loss of target label rather than maximize loss of correct label
         if targeted:
             loss = -loss
-        if iters_before_l1 is not None and iters_before_l1 <= i:
-            l1_loss = l1_penalty * torch.sum(torch.abs(eta))
-            combined_loss = loss - l1_loss # Subtract l1_loss because combined_loss is being maximized
-        else:
-            combined_loss = loss
+
+        l1_loss = l1_penalty * torch.sum(torch.abs(eta))
+        combined_loss = loss - l1_loss # Subtract l1_loss because combined_loss is being maximized
 
         combined_loss.backward()
         curr_perturbation = optimize_linear(adv_x.grad, eps_iter, norm) # FGM step, valid for both L-infinity and L2
