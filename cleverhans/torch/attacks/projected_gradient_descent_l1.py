@@ -111,12 +111,9 @@ def projected_gradient_descent_l1(
 
     # Clip eta
     eta = clip_eta(eta, norm, eps)
-    if clip_min is not None or clip_max is not None:
-        # clip eta again such that clip_min <= adv_x <= clip_max
-        # Needed because we want eta to correctly capture all clipping, as
-        # we are applying regularization directly to eta
-        eta = torch.clamp(eta, clip_min - x, clip_max - x)
     adv_x = x + eta
+    if clip_min is not None or clip_max is not None:
+        adv_x = torch.clamp(adv_x, clip_min, clip_max)
 
     if y is None:
         # Using model predictions as ground truth to avoid label leaking
@@ -131,18 +128,27 @@ def projected_gradient_descent_l1(
         if targeted:
             loss = -loss
 
-        l1_loss = l1_penalty * torch.sum(torch.abs(eta))
+        # l1_loss expresses the L1 norm of eta as a function of adv_x, so that gradients will correctly flow
+        # back to adv_x during backprop
+        l1_loss = l1_penalty * torch.sum(torch.abs(adv_x - x))
         combined_loss = loss - l1_loss # Subtract l1_loss because combined_loss is being maximized
 
         combined_loss.backward()
         curr_perturbation = optimize_linear(adv_x.grad, eps_iter, norm) # FGM step, valid for both L-infinity and L2
-        eta += curr_perturbation # eta accumulates the total perturbation so far
-        # Clip eta such that adv_x is in the norm ball
-        eta = clip_eta(eta, norm, eps)
-        # Also clip such that adv_x elements are within [clip_min, clip_max]
+        adv_x = adv_x + curr_perturbation # eta implicitly accumulates the total perturbation so far
+        # Clip adv_x in the same way that fast_gradient_method would
         if clip_min is not None or clip_max is not None:
-            eta = torch.clamp(eta, clip_min - x, clip_max - x)
+            adv_x = torch.clamp(adv_x, clip_min, clip_max)
+
+        # Clip eta such that adv_x is in the norm ball
+        eta = adv_x - x
+        eta = clip_eta(eta, norm, eps)
         adv_x = x + eta
+
+        # Redo clipping, as subtracting and re-adding eta can add some
+        # small numerical error
+        if clip_min is not None or clip_max is not None:
+            adv_x = torch.clamp(adv_x, clip_min, clip_max)
         i += 1
 
     asserts.append(eps_iter <= eps)
