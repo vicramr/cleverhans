@@ -1,5 +1,5 @@
 """
-TODO
+Modified PGD attack which uses Grad-CAM to only modify a selected area of the image.
 This only works for convolutional neural networks where the inputs have shape (batch_size, n_channels, *, *)
 """
 import numpy as np
