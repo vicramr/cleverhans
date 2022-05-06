@@ -147,9 +147,14 @@ def zero_out_clipped_grads(grad, x, clip_min, clip_max):
 
 def nes(model, x, y, loss_fn, n, sigma):
     """
+    Natural Evolution Strategies for gradient estimation.
+
     Returns an estimate of the gradient using only black-box queries. This implements
     Algorithm 1 from "Black-box Adversarial Attacks with Limited Queries and Information".
     Paper link: https://proceedings.mlr.press/v80/ilyas18a.html
+
+    Based on the authors' TensorFlow code:
+    https://github.com/labsix/limited-blackbox-attacks/blob/master/attacks.py
 
     :param model: a callable model function
     :param x: a batch of size 1
